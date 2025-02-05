@@ -5,11 +5,11 @@ import os
 from datetime import datetime
 from bot import bot  # Importamos el bot desde bot.py
 
-TOKEN = "MTMzMzY1NjQ5ODk2NTk3NTEyMQ.GPQDTv.mI-PM7HuWV0zr3kxZ3PT26ARfp680djvmqYT7M"  # Coloca aquí tu token de forma segura
+TOKEN = "os.getenv("DISCORD_TOKEN")"  # Coloca aquí tu token de forma segura
 CHANNEL_ID = 1212672913304719370  # Reemplaza con el ID de tu canal
 
 HEADERS = {
-    'x-rapidapi-key': "df0f752139msh9ceb95b678f60a7p1d1c78jsnf9140e769870",
+    'x-rapidapi-key': "os.getenv("RAPIDAPI_KEY0"),
     'x-rapidapi-host': "api-nba-v1.p.rapidapi.com"
 }
 
