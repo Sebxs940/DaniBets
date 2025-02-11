@@ -6,7 +6,7 @@ from datetime import datetime
 from bot import bot  # Importamos el bot desde bot.py
 
 TOKEN = os.getenv("DISCORD_TOKEN")  # Coloca aquí tu token de forma segura
-CHANNEL_ID = 1212672913304719370  # Reemplaza con el ID de tu canal
+CHANNEL_ID = 1180556157161590864  # Reemplaza con el ID de tu canal
 
 HEADERS = {
     'x-rapidapi-key': "df0f752139msh9ceb95b678f60a7p1d1c78jsnf9140e769870",
