@@ -48,11 +48,11 @@ def obtener_resultados_por_fecha(fecha, equipo_nombre=None):
 
 # Comando para consultar los resultados de un equipo en una fecha específica
 @bot.tree.command(name="resultados", description="Muestra los resultados de los juegos para un equipo en una fecha específica.")
-async def resultados(interaction: discord.Interaction, nombre: str, fecha: str):
+async def resultados(interaction: discord.Interaction, fecha: str):
     """
-    /resultados {nombre} {fecha} - Muestra los resultados de los juegos para un equipo en una fecha específica.
+    /resultados {fecha} - Muestra los resultados de los juegos para un equipo en una fecha específica.
     """
-    resultado = obtener_resultados_por_fecha(fecha, nombre)
+    resultado = obtener_resultados_por_fecha(fecha)
     await interaction.response.send_message(resultado)
 
 # Evento que se ejecuta cuando el bot está listo
