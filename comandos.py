@@ -47,10 +47,11 @@ def obtener_resultados_por_fecha(fecha, equipo_nombre=None):
         return f"Error al obtener los resultados: {str(e)}"
 
 # Comando para consultar los resultados de un equipo en una fecha específica
-@bot.tree.command(name="resultados", description="Muestra los resultados de los juegos para un equipo en una fecha específica.")
+@bot.tree.command(name="resultados", description="Muestra los resultados de los juegos de la NBA para una fecha específica.")
 async def resultados(interaction: discord.Interaction, fecha: str):
     """
-    /resultados {fecha} - Muestra los resultados de los juegos para un equipo en una fecha específica.
+    /resultados {fecha} - Muestra los resultados de los juegos de la NBA para una fecha específica.
+    Formato de fecha: YYYY-MM-DD
     """
     resultado = obtener_resultados_por_fecha(fecha)
     await interaction.response.send_message(resultado)
