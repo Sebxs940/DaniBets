@@ -163,6 +163,15 @@ async def resultados(interaction: discord.Interaction, nombre: str, fecha: str):
     except requests.exceptions.RequestException as e:
         await interaction.response.send_message(f"Error al obtener los resultados: {str(e)}")
 
+@bot.command()
+async def test_logos(ctx):
+    """Comando de prueba para verificar los logos"""
+    embed = obtener_resultados()
+    if isinstance(embed, discord.Embed):
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("Error al obtener resultados")
+
 @bot.event
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
