@@ -184,13 +184,32 @@ async def on_ready():
     except Exception as e:
         print(f"Error al inicializar: {e}")
 
+# Agregar nuevo evento para manejar reconexiones
+@bot.event
+async def on_resumed():
+    print("Conexión restaurada")
+    # Verificar estado de tareas programadas
+    if not publicar_resultados.is_running():
+        publicar_resultados.start()
+        print("Reiniciando tarea de publicación automática")
+
+# Agregar nuevo evento para manejar desconexiones
+@bot.event
+async def on_disconnect():
+    print("Bot desconectado - Intentando reconectar...")
+
 # Manejo global de errores
 @bot.event
 async def on_error(event, *args, **kwargs):
     print(f"Error en el evento {event}: {args}")
 
+# Modificar el código de inicio para incluir reintentos
 if __name__ == "__main__":
-    try:
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"Error al iniciar el bot: {e}")
+    while True:
+        try:
+            bot.run(TOKEN)
+        except Exception as e:
+            print(f"Error al iniciar el bot: {e}")
+            print("Reintentando conexión en 60 segundos...")
+            import time
+            time.sleep(60)
