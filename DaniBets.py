@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands, tasks
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, time
 
 # Configuración del bot con intents específicos
 intents = discord.Intents.default()
@@ -62,16 +62,26 @@ def obtener_resultados():
         data = respuesta.json()
         juegos = data.get("response", [])
 
-        # Creamos el embed
+        # Creamos el embed una vez por todos los juegos
         embed = discord.Embed(title="Resultados de la NBA", color=0x1e90ff)
+        
+        # Variables para almacenar los logos del primer juego
+        primer_logo_local = None
+        primer_logo_visitante = None
 
         for juego in juegos:
             equipo_local = juego["teams"]["home"]["name"]
             equipo_visitante = juego["teams"]["visitors"]["name"]
             
-            # Obtener logos de los equipos
+            # Obtener logos de los equipos desde TEAM_LOGOS
             logo_local = TEAM_LOGOS.get(equipo_local)
             logo_visitante = TEAM_LOGOS.get(equipo_visitante)
+            
+            # Guardar los logos del primer juego
+            if primer_logo_local is None and logo_local:
+                primer_logo_local = logo_local
+            if primer_logo_visitante is None and logo_visitante:
+                primer_logo_visitante = logo_visitante
             
             # Verificar si hay puntajes disponibles
             scores = juego.get("scores", {})
@@ -81,20 +91,19 @@ def obtener_resultados():
             fecha = juego["start"].split("T")[0] if "start" in juego else "Fecha no disponible"
             estado_partido = juego.get("status", {}).get("long", "Estado no disponible")
             
-            # Crear campo para el partido
             embed.add_field(
                 name="Partido:", 
                 value=f"🏀 **{equipo_visitante}** ({puntos_visitante}) vs **{equipo_local}** ({puntos_local})\n📅 {fecha}\n📊 Estado: {estado_partido}",
                 inline=False
             )
 
-            # Añadir los logos si están disponibles
-            if logo_local:
-                embed.set_thumbnail(url=logo_local)
-            if logo_visitante:
-                embed.set_image(url=logo_visitante)
+        # Añadir los logos del primer juego al embed
+        if primer_logo_local:
+            embed.set_thumbnail(url=primer_logo_local)
+        if primer_logo_visitante:
+            embed.set_image(url=primer_logo_visitante)
 
-        embed.set_footer(text="Resultados actualizados")
+        embed.set_footer(text=f"Resultados actualizados - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         return embed
         
     except requests.exceptions.RequestException as e:
@@ -102,7 +111,7 @@ def obtener_resultados():
     except Exception as e:
         return f"Error inesperado: {str(e)}"
 
-@tasks.loop(hours=24)
+@tasks.loop(time=[time(hour=0, minute=0)])  # Ejecutar a las 12 AM
 async def publicar_resultados():
     canal = bot.get_channel(CHANNEL_ID)
     if canal:
@@ -111,6 +120,17 @@ async def publicar_resultados():
             await canal.send(embed=embed)
         else:
             await canal.send(embed)
+
+# Función de verificación de logos
+async def verificar_logos():
+    print("Verificando acceso a los logos...")
+    for equipo, url in TEAM_LOGOS.items():
+        try:
+            respuesta = requests.head(url)
+            if respuesta.status_code != 200:
+                print(f"⚠️ Error: Logo no disponible para {equipo}: {url}")
+        except Exception as e:
+            print(f"❌ Error al verificar logo de {equipo}: {str(e)}")
 
 @bot.tree.command(name="resultados", description="Muestra los resultados de los juegos para un equipo en una fecha específica.")
 async def resultados(interaction: discord.Interaction, nombre: str, fecha: str):
@@ -149,9 +169,11 @@ async def on_ready():
     try:
         await bot.tree.sync()
         print("Comandos sincronizados correctamente")
+        await verificar_logos()  # Verificar logos al iniciar
+        publicar_resultados.start()  # Iniciar la tarea programada
+        print("Tarea de publicación automática iniciada")
     except Exception as e:
-        print(f"Error al sincronizar los comandos: {e}")
-    publicar_resultados.start()
+        print(f"Error al inicializar: {e}")
 
 # Manejo global de errores
 @bot.event
