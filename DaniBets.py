@@ -143,15 +143,24 @@ def obtener_resultados():
     except Exception as e:
         return f"Error inesperado: {str(e)}"
 
+# Modificar la tarea programada
 @tasks.loop(time=time(hour=0, minute=0, tzinfo=timezone(timedelta(hours=-5))))
 async def publicar_resultados():
-    canal = bot.get_channel(CHANNEL_ID)
-    if canal:
-        embed = obtener_resultados()
-        if isinstance(embed, discord.Embed):
-            await canal.send(embed=embed)
+    try:
+        canal = bot.get_channel(CHANNEL_ID)
+        if canal:
+            print(f"Obteniendo resultados para publicar en {canal.name}")
+            embed = obtener_resultados()
+            if isinstance(embed, discord.Embed):
+                await canal.send(embed=embed)
+                print("Resultados publicados exitosamente")
+            else:
+                await canal.send(embed)
+                print("Error: No se pudo crear el embed")
         else:
-            await canal.send(embed)
+            print(f"Error: No se pudo encontrar el canal {CHANNEL_ID}")
+    except Exception as e:
+        print(f"Error en publicar_resultados: {e}")
 
 # Función de verificación de logos
 async def verificar_logos():
@@ -211,9 +220,21 @@ async def on_ready():
         await bot.tree.sync()
         print("Comandos sincronizados correctamente")
         await verificar_logos()  # Verificar logos al iniciar
-        publicar_resultados.start()  # Iniciar la tarea programada
+        
+        # Iniciar tarea programada con manejo de errores
+        publicar_resultados.start()
         print("Tarea de publicación automática iniciada")
-        print(f"Próxima publicación programada para: {publicar_resultados.next_iteration.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        
+        # Verificar si la tarea se programó correctamente
+        if publicar_resultados.next_iteration:
+            print(f"Próxima publicación programada para: {publicar_resultados.next_iteration.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        else:
+            print("⚠️ Advertencia: No se pudo determinar la próxima hora de publicación")
+            # Intentar mostrar la hora programada
+            tz = timezone(timedelta(hours=-5))
+            proxima_hora = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            print(f"Hora objetivo esperada: {proxima_hora.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            
     except Exception as e:
         print(f"Error al inicializar: {e}")
 
