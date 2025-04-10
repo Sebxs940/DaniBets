@@ -4,7 +4,7 @@ import requests
 import os
 import asyncio
 import backoff
-from datetime import datetime, time
+from datetime import datetime, time, timezone, timedelta
 
 # Configuración del bot con intents específicos
 intents = discord.Intents.default()
@@ -143,8 +143,7 @@ def obtener_resultados():
     except Exception as e:
         return f"Error inesperado: {str(e)}"
 
-@tasks.loop(time=time(hour=0, minute=0, tzinfo=datetime.timezone(datetime.timedelta(hours=-5))))
-
+@tasks.loop(time=time(hour=0, minute=0, tzinfo=timezone(timedelta(hours=-5))))
 async def publicar_resultados():
     canal = bot.get_channel(CHANNEL_ID)
     if canal:
@@ -214,6 +213,7 @@ async def on_ready():
         await verificar_logos()  # Verificar logos al iniciar
         publicar_resultados.start()  # Iniciar la tarea programada
         print("Tarea de publicación automática iniciada")
+        print(f"Próxima publicación programada para: {publicar_resultados.next_iteration.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     except Exception as e:
         print(f"Error al inicializar: {e}")
 
