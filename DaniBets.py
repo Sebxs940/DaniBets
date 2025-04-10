@@ -2,12 +2,44 @@ import discord
 from discord.ext import commands, tasks
 import requests
 import os
+import asyncio
+import backoff
 from datetime import datetime, time
 
 # Configuración del bot con intents específicos
 intents = discord.Intents.default()
 intents.message_content = True  # Agregar permiso para contenido de mensajes
-bot = commands.Bot(command_prefix='!', intents=intents)
+
+class ReconnectingBot(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 5
+        self.reconnect_delay = 60
+
+    async def setup_hook(self):
+        self.loop.create_task(self.maintain_connection())
+
+    async def maintain_connection(self):
+        while True:
+            try:
+                await self.wait_until_ready()
+                await asyncio.sleep(30)  # Verificar cada 30 segundos
+                if not self.is_closed():
+                    self.reconnect_attempts = 0
+            except Exception as e:
+                print(f"Error en maintain_connection: {e}")
+            await asyncio.sleep(30)
+
+    @backoff.on_exception(
+        backoff.expo,
+        (discord.ConnectionClosed, discord.GatewayNotFound),
+        max_tries=5
+    )
+    async def connect_with_backoff(self):
+        await self.connect()
+
+bot = ReconnectingBot(command_prefix='!', intents=intents)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = 1180556157161590864
@@ -111,7 +143,8 @@ def obtener_resultados():
     except Exception as e:
         return f"Error inesperado: {str(e)}"
 
-@tasks.loop(time=[time(hour=0, minute=0)])  # Ejecutar a las 12 AM
+@tasks.loop(time=time(hour=0, minute=0, tzinfo=datetime.timezone(datetime.timedelta(hours=-5))))
+
 async def publicar_resultados():
     canal = bot.get_channel(CHANNEL_ID)
     if canal:
@@ -184,32 +217,44 @@ async def on_ready():
     except Exception as e:
         print(f"Error al inicializar: {e}")
 
-# Agregar nuevo evento para manejar reconexiones
-@bot.event
-async def on_resumed():
-    print("Conexión restaurada")
-    # Verificar estado de tareas programadas
-    if not publicar_resultados.is_running():
-        publicar_resultados.start()
-        print("Reiniciando tarea de publicación automática")
-
-# Agregar nuevo evento para manejar desconexiones
+# Mejorar el manejo de desconexiones
 @bot.event
 async def on_disconnect():
-    print("Bot desconectado - Intentando reconectar...")
+    print(f"Bot desconectado - Intento {bot.reconnect_attempts + 1} de {bot.max_reconnect_attempts}")
+    bot.reconnect_attempts += 1
+    
+    if bot.reconnect_attempts < bot.max_reconnect_attempts:
+        print(f"Esperando {bot.reconnect_delay} segundos antes de reconectar...")
+        await asyncio.sleep(bot.reconnect_delay)
+    else:
+        print("Máximo número de intentos de reconexión alcanzado. Reiniciando bot...")
+        await bot.close()
+        bot.reconnect_attempts = 0
 
-# Manejo global de errores
-@bot.event
-async def on_error(event, *args, **kwargs):
-    print(f"Error en el evento {event}: {args}")
+# Agregar comando de estado
+@bot.command(name="status")
+async def check_status(ctx):
+    """Muestra el estado actual del bot"""
+    embed = discord.Embed(title="Estado del Bot", color=0x00ff00)
+    embed.add_field(name="Latencia", value=f"{round(bot.latency * 1000)}ms", inline=True)
+    embed.add_field(name="Reconexiones", value=str(bot.reconnect_attempts), inline=True)
+    embed.add_field(name="Tareas activas", value=str(len(bot.cogs)), inline=True)
+    await ctx.send(embed=embed)
 
-# Modificar el código de inicio para incluir reintentos
+# Modificar el código de inicio
 if __name__ == "__main__":
-    while True:
+    async def start_bot():
         try:
-            bot.run(TOKEN)
+            await bot.connect_with_backoff()
         except Exception as e:
-            print(f"Error al iniciar el bot: {e}")
-            print("Reintentando conexión en 60 segundos...")
-            import time
+            print(f"Error crítico: {e}")
+            return False
+        return True
+
+    while True:
+        success = asyncio.run(start_bot())
+        if not success:
+            print("Reiniciando bot en 60 segundos...")
             time.sleep(60)
+        else:
+            break
