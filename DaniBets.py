@@ -4,7 +4,8 @@ import requests
 import os
 import asyncio
 import backoff
-from datetime import datetime, time, timezone, timedelta
+import time  # Agregamos esta importación
+from datetime import datetime, timezone, timedelta
 
 # Configuración del bot con intents específicos
 intents = discord.Intents.default()
@@ -243,18 +244,8 @@ async def check_status(ctx):
 
 # Modificar el código de inicio
 if __name__ == "__main__":
-    async def start_bot():
-        try:
-            await bot.connect_with_backoff()
-        except Exception as e:
-            print(f"Error crítico: {e}")
-            return False
-        return True
-
-    while True:
-        success = asyncio.run(start_bot())
-        if not success:
-            print("Reiniciando bot en 60 segundos...")
-            time.sleep(60)
-        else:
-            break
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"Error al iniciar el bot: {e}")
+        time.sleep(60)  # Espera 60 segundos antes de salir
