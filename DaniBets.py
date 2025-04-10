@@ -4,8 +4,7 @@ import requests
 import os
 import asyncio
 import backoff
-import time  # Agregamos esta importación
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 
 # Configuración del bot con intents específicos
 intents = discord.Intents.default()
