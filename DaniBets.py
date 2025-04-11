@@ -19,10 +19,21 @@ class ReconnectingBot(commands.Bot):
         self.reconnect_delay = 60
         self.session = None
         self._closed = False
+        self.connection_lock = asyncio.Lock()
+        self.last_heartbeat = datetime.now()
+        self.heartbeat_timeout = 30  # segundos
 
     async def setup_hook(self):
         self.loop.create_task(self.maintain_connection())
-        self.session = aiohttp.ClientSession()
+        self.loop.create_task(self.monitor_heartbeat())
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30),
+            connector=aiohttp.TCPConnector(
+                limit=50,
+                ttl_dns_cache=300,
+                keepalive_timeout=60
+            )
+        )
 
     async def close(self):
         self._closed = True
@@ -30,16 +41,30 @@ class ReconnectingBot(commands.Bot):
             await self.session.close()
         await super().close()
 
+    async def monitor_heartbeat(self):
+        while not self._closed:
+            try:
+                await asyncio.sleep(self.heartbeat_timeout)
+                if (datetime.now() - self.last_heartbeat).seconds > self.heartbeat_timeout:
+                    print("⚠️ Detectada posible desconexión por inactividad")
+                    if self.ws and not self.ws.closed:
+                        await self.ws.ping()
+                    self.last_heartbeat = datetime.now()
+            except Exception as e:
+                print(f"Error en monitor_heartbeat: {e}")
+
     async def maintain_connection(self):
         while not self._closed:
             try:
-                await self.wait_until_ready()
-                await asyncio.sleep(30)
+                async with self.connection_lock:
+                    await self.wait_until_ready()
+                    self.last_heartbeat = datetime.now()
+                await asyncio.sleep(5)  # Reducido para respuesta más rápida
                 if not self.is_closed():
                     self.reconnect_attempts = 0
             except Exception as e:
                 print(f"Error en maintain_connection: {e}")
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)
 
     @backoff.on_exception(
         backoff.expo,
@@ -167,20 +192,21 @@ def obtener_resultados():
 @tasks.loop(time=[time(hour=0, minute=0, tzinfo=timezone(timedelta(hours=-5)))])
 async def publicar_resultados():
     try:
-        canal = bot.get_channel(CHANNEL_ID)
-        if canal:
-            print(f"Obteniendo resultados para publicar en {canal.name}")
-            embed = obtener_resultados()
-            if isinstance(embed, discord.Embed):
-                await canal.send(embed=embed)
-                print(f"Resultados publicados exitosamente a las {datetime.now(timezone(timedelta(hours=-5))).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        async with bot.connection_lock:
+            canal = bot.get_channel(CHANNEL_ID)
+            if canal:
+                print(f"Obteniendo resultados para publicar en {canal.name}")
+                embed = await asyncio.to_thread(obtener_resultados)  # Ejecutar en thread separado
+                if isinstance(embed, discord.Embed):
+                    await canal.send(embed=embed)
+                    print(f"✅ Resultados publicados exitosamente")
+                else:
+                    await canal.send(embed)
+                    print("❌ Error: No se pudo crear el embed")
             else:
-                await canal.send(embed)
-                print("Error: No se pudo crear el embed")
-        else:
-            print(f"Error: No se pudo encontrar el canal {CHANNEL_ID}")
+                print(f"❌ Error: No se pudo encontrar el canal {CHANNEL_ID}")
     except Exception as e:
-        print(f"Error en publicar_resultados: {e}")
+        print(f"❌ Error en publicar_resultados: {e}")
 
 @publicar_resultados.before_loop
 async def before_publicar():
