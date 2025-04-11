@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 import requests
 import os
 import asyncio
+import aiohttp
 import backoff
 from datetime import datetime, timezone, timedelta, time
 
@@ -16,15 +17,24 @@ class ReconnectingBot(commands.Bot):
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 5
         self.reconnect_delay = 60
+        self.session = None
+        self._closed = False
 
     async def setup_hook(self):
         self.loop.create_task(self.maintain_connection())
+        self.session = aiohttp.ClientSession()
+
+    async def close(self):
+        self._closed = True
+        if self.session:
+            await self.session.close()
+        await super().close()
 
     async def maintain_connection(self):
-        while True:
+        while not self._closed:
             try:
                 await self.wait_until_ready()
-                await asyncio.sleep(30)  # Verificar cada 30 segundos
+                await asyncio.sleep(30)
                 if not self.is_closed():
                     self.reconnect_attempts = 0
             except Exception as e:
@@ -33,11 +43,21 @@ class ReconnectingBot(commands.Bot):
 
     @backoff.on_exception(
         backoff.expo,
-        (discord.ConnectionClosed, discord.GatewayNotFound),
-        max_tries=5
+        (discord.ConnectionClosed, discord.GatewayNotFound, aiohttp.ClientError),
+        max_tries=5,
+        max_time=300
     )
     async def connect_with_backoff(self):
-        await self.connect()
+        if self.session and self.session.closed:
+            self.session = aiohttp.ClientSession()
+        try:
+            await self.connect()
+        except Exception as e:
+            print(f"Error de conexión: {e}")
+            if self.session:
+                await self.session.close()
+            self.session = aiohttp.ClientSession()
+            raise
 
 bot = ReconnectingBot(command_prefix='!', intents=intents)
 
@@ -247,8 +267,14 @@ async def on_disconnect():
     bot.reconnect_attempts += 1
     
     if bot.reconnect_attempts < bot.max_reconnect_attempts:
-        print(f"Esperando {bot.reconnect_delay} segundos antes de reconectar...")
-        await asyncio.sleep(bot.reconnect_delay)
+        delay = bot.reconnect_delay * (2 ** (bot.reconnect_attempts - 1))  # Backoff exponencial
+        print(f"Esperando {delay} segundos antes de reconectar...")
+        await asyncio.sleep(delay)
+        try:
+            if bot.session and bot.session.closed:
+                bot.session = aiohttp.ClientSession()
+        except Exception as e:
+            print(f"Error al crear nueva sesión: {e}")
     else:
         print("Máximo número de intentos de reconexión alcanzado. Reiniciando bot...")
         await bot.close()
@@ -266,8 +292,14 @@ async def check_status(ctx):
 
 # Modificar el código de inicio
 if __name__ == "__main__":
-    try:
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"Error al iniciar el bot: {e}")
-        time.sleep(60)  # Espera 60 segundos antes de salir
+    while True:
+        try:
+            asyncio.run(bot.run(TOKEN))
+        except (discord.ConnectionClosed, discord.GatewayNotFound, 
+                aiohttp.ClientError, ConnectionResetError) as e:
+            print(f"Error de conexión: {e}")
+            print("Reiniciando en 60 segundos...")
+            time.sleep(60)
+        except Exception as e:
+            print(f"Error crítico: {e}")
+            break

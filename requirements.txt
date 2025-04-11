@@ -1,3 +1,4 @@
 discord.py
 requests
 backoff
+aiohttp>=3.7.4
