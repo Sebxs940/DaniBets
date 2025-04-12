@@ -196,7 +196,9 @@ async def publicar_resultados():
             canal = bot.get_channel(CHANNEL_ID)
             if canal:
                 print(f"Obteniendo resultados para publicar en {canal.name}")
-                embed = await asyncio.to_thread(obtener_resultados)  # Ejecutar en thread separado
+                # Reemplazar asyncio.to_thread con loop.run_in_executor
+                loop = asyncio.get_event_loop()
+                embed = await loop.run_in_executor(None, obtener_resultados)
                 if isinstance(embed, discord.Embed):
                     await canal.send(embed=embed)
                     print(f"✅ Resultados publicados exitosamente")
