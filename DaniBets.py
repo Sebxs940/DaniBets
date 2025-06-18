@@ -87,7 +87,7 @@ class ReconnectingBot(commands.Bot):
 bot = ReconnectingBot(command_prefix='!', intents=intents)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = 1180556157161590864
+CHANNEL_ID = 1384722225151869110
 
 HEADERS = {
     'x-rapidapi-key': "df0f752139msh9ceb95b678f60a7p1d1c78jsnf9140e769870",
